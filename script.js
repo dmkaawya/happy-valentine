@@ -886,3 +886,177 @@ function saveCurrentProfile() {
     const nickname = document.getElementById('wizNickname')?.value.trim();
     if (!name || !phone) { showToast('Please fill name and phone', 'error'); return; }
     savedProfiles.push({ name, phone, nic, age, nickname: nickname || name });
+
+    savedProfiles.push({ name, phone, nic, age, nickname: nickname || name });
+    localStorage.setItem('ml_saved_profiles_' + currentUser.id, JSON.stringify(savedProfiles));
+    showToast('Profile saved for later use', 'success');
+}
+
+// ===================================================================
+// DASHBOARD
+// ===================================================================
+function renderDashboard() {
+    if (!currentUser) { navigateTo('home'); openAuthModal('login'); return; }
+    const myAppts = appointments.filter(a => a.userId === currentUser.id || a.patientPhone === currentUser.phone1);
+    const upcoming = myAppts.filter(a => a.status !== 'cancelled' && new Date(a.date) >= new Date(new Date().toDateString())).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const completed = myAppts.filter(a => a.status === 'completed').length;
+
+    document.getElementById('dashWelcome').innerHTML = `
+        <div><h3>${t('dashboardTitle')}, ${currentUser.fullName}!</h3><p>${currentUser.email} | ${currentUser.phone1} | ${t('idNumber')}: ${currentUser.idNumber}</p></div>
+    `;
+
+    document.getElementById('dashStats').innerHTML = `
+        <div class="dash-stat"><iconify-icon icon="lucide:calendar-check" width="28"></iconify-icon><div class="num">${upcoming.length}</div><div class="label">${t('upcomingAppointments')}</div></div>
+        <div class="dash-stat"><iconify-icon icon="lucide:check-circle" width="28"></iconify-icon><div class="num">${completed}</div><div class="label">${t('navHome')}</div></div>
+        <div class="dash-stat"><iconify-icon icon="lucide:bell" width="28"></iconify-icon><div class="num">${userNotifications.length}</div><div class="label">${t('notifications')}</div></div>
+    `;
+
+    const apptDiv = document.getElementById('dashAppointments');
+    if (upcoming.length === 0) {
+        apptDiv.innerHTML = `<div class="empty-msg">${t('noAppointments')}</div>`;
+    } else {
+        apptDiv.innerHTML = upcoming.slice(0, 5).map(a => `
+            <div class="appt-card">
+                <div class="appt-info">
+                    <strong>${a.doctorName}</strong>
+                    <span>${a.date} | Queue #${a.queueNumber} | ${a.branch ? (branches.find(b => b.id === a.branch)?.name || a.branch) : '-'}</span>
+                    <span>Rs. ${a.fee.toLocaleString()} | ${a.payMethod === 'bank' ? t('bankTransfer') : a.payMethod === 'card' ? t('cardPayment') : t('payLater')}</span>
+                </div>
+                <span class="appt-status status-${a.status}">${a.status.charAt(0).toUpperCase() + a.status.slice(1)}</span>
+            </div>
+        `).join('');
+    }
+
+    const notifDiv = document.getElementById('dashNotifications');
+    if (userNotifications.length === 0) {
+        notifDiv.innerHTML = `<div class="empty-msg">${t('noNotifications')}</div>`;
+    } else {
+        notifDiv.innerHTML = userNotifications.slice(-5).reverse().map(n => `
+            <div class="notif-item">
+                <iconify-icon icon="lucide:bell" width="18"></iconify-icon>
+                <div><div class="notif-text">${n.text}</div><div class="notif-time">${n.time}</div></div>
+            </div>
+        `).join('');
+    }
+}
+
+// ===================================================================
+// ALL APPOINTMENTS PAGE
+// ===================================================================
+function renderAllAppointments() {
+    if (!currentUser) { navigateTo('home'); openAuthModal('login'); return; }
+    const myAppts = appointments.filter(a => a.userId === currentUser.id || a.patientPhone === currentUser.phone1).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const div = document.getElementById('allAppointmentsList');
+    if (myAppts.length === 0) {
+        div.innerHTML = `<div class="empty-msg">${t('noAppointments')}</div>`;
+        return;
+    }
+    div.innerHTML = myAppts.map(a => `
+        <div class="appt-card">
+            <div class="appt-info">
+                <strong>${a.doctorName}</strong>
+                <span>Ref: ${a.id} | ${a.date} | Queue #${a.queueNumber}</span>
+                <span>${a.patientName} | ${a.patientPhone} | ${a.branch ? (branches.find(b => b.id === a.branch)?.name || a.branch) : '-'}</span>
+                <span>Rs. ${a.fee.toLocaleString()} | Payment: ${a.payMethod === 'bank' ? t('bankTransfer') : a.payMethod === 'card' ? t('cardPayment') : t('payLater')}</span>
+            </div>
+            <span class="appt-status status-${a.status}">${a.status.charAt(0).toUpperCase() + a.status.slice(1)}</span>
+        </div>
+    `).join('');
+}
+
+// ===================================================================
+// NOTIFICATIONS
+// ===================================================================
+function addNotification(text) {
+    if (!currentUser) return;
+    const notif = { text, time: new Date().toLocaleString() };
+    userNotifications.push(notif);
+    localStorage.setItem('ml_notifs_' + currentUser.id, JSON.stringify(userNotifications));
+    const badge = document.getElementById('notifBadge');
+    badge.textContent = userNotifications.length;
+    badge.style.display = userNotifications.length > 0 ? 'flex' : 'none';
+}
+
+function openNotifications() {
+    const list = document.getElementById('notifList');
+    if (userNotifications.length === 0) {
+        list.innerHTML = `<div class="notif-empty">${t('noNotifications')}</div>`;
+    } else {
+        list.innerHTML = userNotifications.slice().reverse().map(n => `
+            <div class="notif-item">
+                <iconify-icon icon="lucide:bell" width="18"></iconify-icon>
+                <div><div class="notif-text">${n.text}</div><div class="notif-time">${n.time}</div></div>
+            </div>
+        `).join('');
+    }
+    document.getElementById('notifModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('userDropdown').classList.remove('open');
+}
+
+// ===================================================================
+// UTILITY FUNCTIONS
+// ===================================================================
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => showToast('Copied: ' + text, 'success')).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        showToast('Copied: ' + text, 'success');
+    });
+}
+
+function handleContactForm(e) {
+    e.preventDefault();
+    showToast('Message sent successfully!', 'success');
+    e.target.reset();
+    return false;
+}
+
+function showToast(message, type = 'success', isOtp = false) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    if (isOtp) {
+        toast.innerHTML = `<iconify-icon icon="lucide:shield-check" width="20"></iconify-icon><div><div style="font-size:.78rem;opacity:.8;margin-bottom:2px">${type === 'info' ? 'Your OTP is:' : 'OTP'}</div><div class="otp-display">${message.replace(t('sendOtp') + ': ', '')}</div></div>`;
+    } else {
+        const icons = { success: 'lucide:check-circle', error: 'lucide:x-circle', warning: 'lucide:alert-triangle', info: 'lucide:info' };
+        toast.innerHTML = `<iconify-icon icon="${icons[type] || 'lucide:info'}" width="20"></iconify-icon><span>${message}</span>`;
+    }
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('removing');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, isOtp ? 8000 : 3500);
+}
+
+// ===================================================================
+// CLOSE MODALS ON OVERLAY CLICK / ESCAPE
+// ===================================================================
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+            clearOtpTimers();
+        }
+    });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(m => {
+            m.classList.remove('open');
+            document.body.style.overflow = '';
+        });
+        clearOtpTimers();
+    }
+});
+
+// ===================================================================
+// BOOT
+// ===================================================================
+init();
